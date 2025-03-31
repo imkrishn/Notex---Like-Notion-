@@ -1,7 +1,6 @@
 import { database } from "@/app/appwrite";
 
-export async function updatePageData(data: any) {
-  const pageId = '67e289650020686faa23'
+export async function updatePageData(pageId: string, data: any) {
   try {
     await database.updateDocument(
       process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,

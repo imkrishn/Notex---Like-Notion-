@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   images: {
     domains: ["cloud.appwrite.io", "cdn.jsdelivr.net"],
   },
-  async headers() {
+  /* async headers() {
     return [
       {
         source: '/api/:path*',
@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
         ]
       }
     ]
-  }
+  } */
 };
 
 export default nextConfig;
