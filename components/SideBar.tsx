@@ -6,11 +6,14 @@ import Page from "./Page";
 import { database } from "@/app/appwrite";
 import fetchUserLoggedInUser from "@/lib/fetchLoggedInUser";
 import { useRouter } from "next/navigation";
-import { useDispatch } from "react-redux";
-import { AppDispatch } from "@/redux/store";
+import { useDispatch, useSelector } from "react-redux";
+import { AppDispatch, RootState } from "@/redux/store";
 import { setLoggedInUser } from "@/redux/slices/loggedInUser";
 import { useLoggedInUser } from "@/hooks/getLoggedInUser";
 import Spinner from "./Spinner";
+import { PageType } from "@/types/pageType";
+import { Query } from "appwrite";
+import { toast } from "sonner";
 import Search from "./Search";
 
 type Menu = 'Home' | 'Favourite' | 'Create' | 'Personal' | 'Trash' | 'Search' | 'Shared';
@@ -19,6 +22,7 @@ const SideBar = () => {
   const { theme, setTheme } = useTheme();
   const [isPersonal, setIsPersonal] = useState(true);
   const [profile, setProfile] = useState(false);
+  const [pages, setPages] = useState<PageType[]>([])
   const [menu, setMenu] = useState<Menu>(() => {
     const menuValue = localStorage.getItem('menu');
     return menuValue ? JSON.parse(menuValue) : 'Home'
@@ -26,7 +30,8 @@ const SideBar = () => {
   const router = useRouter();
   const { $id, fullName, email } = useLoggedInUser();
   const [onCreatePageLoading, setOnCreatePageLoading] = useState<boolean>(false)
-  const dispatch = useDispatch<AppDispatch>()
+  const dispatch = useDispatch<AppDispatch>();
+  const [deletedPageId, setDeletedPageId] = useState<string>()
 
   useEffect(() => {
     dispatch(setLoggedInUser({ $id, fullName, email }))
@@ -34,7 +39,13 @@ const SideBar = () => {
 
   useEffect(() => {
     setTheme('light')
-  }, [theme])
+  }, [theme]);
+
+  useEffect(() => {
+    const filteredChildrens = pages.filter((children) => children.$id !== deletedPageId);
+    setPages(filteredChildrens)
+  }, [deletedPageId])
+
 
   function onPersonalClick() {
     setIsPersonal(prev => !prev)
@@ -60,25 +71,62 @@ const SideBar = () => {
         { ownerId: $id }
       );
 
+      if (newPage) setPages(prev => [...prev, newPage])
+
       router.push(`/${fullName}/${newPage.$id}`)
+
+
     } catch (err) {
       console.log(err);
 
     } finally {
       setOnCreatePageLoading(false)
       localStorage.setItem('menu', JSON.stringify('Create'))
-
+      toast.success('New Page Created.');
     }
   }
+
+  useEffect(() => {
+
+    async function fetchPages(userId: string) {
+      try {
+        const thePages = await database.listDocuments(
+          process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
+          process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!,
+          [
+            Query.equal('ownerId', userId),
+            Query.isNull('parentId'),
+            Query.equal('isDeleted', false)
+          ]
+        )
+        setPages(thePages.documents)
+
+
+      } catch (Err) {
+        console.log(Err)
+
+      }
+    }
+
+
+
+    if ($id) {
+      fetchPages($id);
+
+    }
+
+  }, [$id, isPersonal]);
+
+
 
 
   return (
     <aside
       className={`${theme === "dark" ? "bg-[#050505] text-[#786B6B] shadow-gray-400" : "bg-[#FFFFFF] text-[#928989]"
-        } min-w-72 p-4 resize before:pointer-events-none shadow-lg before:absolute before:inset-0  before:shadow-[inset_0_0_10px_rgba(0,0,0,0.3)] relative`}
+        } min-w-72 p-4 hidden md:block resize before:pointer-events-none shadow-lg before:absolute before:inset-0  before:shadow-[inset_0_0_10px_rgba(0,0,0,0.3)] relative`}
     >
       {onCreatePageLoading && <div className="absolute w-screen h-screen z-[99999] opacity-70 flex items-center bg-amber-50 justify-center text-2xl font-bold text-[#706b6b] "><p className="grid grid-cols-2 items-center w-max"><Spinner size={30} color="#3897E4" />Creating...</p></div>}
-      {/*<Search />*/}
+      {<Search />}
       <nav className="flex items-end gap-1">
         <p className="text-4xl font-black text-[#3897E4]">N</p>
         <p className="text-2xl font-black text-[#30C24B]">otex</p>
@@ -117,9 +165,9 @@ const SideBar = () => {
               : <svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-up"><path d="m18 15-6-6-6 6" /></svg>
             }
           </div>
-          <div className="flex flex-col pl-[40px]">
-            {isPersonal && ['*', '*', '*', '*', '*', '*'].map((element, index) => (
-              <Page key={index} />
+          <div className="flex flex-col pl-[40px] lg:h-64 p-2 overflow-y-auto">
+            {isPersonal && pages && pages.map((element) => (
+              <Page key={element.$id} page={element} loggedInUserName={fullName} loggedInUserId={$id} setDeletedId={setDeletedPageId} />
             ))}
           </div>
         </div>

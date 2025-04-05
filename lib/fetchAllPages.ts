@@ -1,8 +1,9 @@
 import { database } from "@/app/appwrite"
+import { PageType } from "@/types/pageType"
 import { Query } from "appwrite"
 
 
-export default async function fetchPages(userId: string) {
+export async function fetchPages(userId: string) {
   try {
     const pages = await database.listDocuments(
       process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
@@ -12,6 +13,18 @@ export default async function fetchPages(userId: string) {
       ]
     )
 
+    return pages.documents as PageType[]
+
+  } catch (Err) {
+    console.log(Err)
+
+  }
+}
+
+export async function fetchSharedPages(userId: string) {
+  try {
+
+
     const sharedWithMe = await database.listDocuments(
       process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
       process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_SHARED_USERS_ID!,
@@ -20,20 +33,9 @@ export default async function fetchPages(userId: string) {
       ]
     );
 
-    console.log(sharedWithMe);
+    const sharedWithMePages = sharedWithMe.documents.map((shared) => shared.pages)
 
-
-    const sharedWithMePagesIds = sharedWithMe.documents.map((shared) => shared.pages.$id);
-
-    const sharedWithMePages = await database.listDocuments(
-      process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
-      process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!,
-      [
-        Query.equal('$id', sharedWithMePagesIds),
-      ]
-    )
-
-    console.log(sharedWithMePages);
+    return sharedWithMePages
 
   } catch (Err) {
     console.log(Err)

@@ -1,9 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit'
 import loggedInUserSlice from './slices/loggedInUser'
+import deletedPageIdSlice from './slices/deletePageId'
 
 export const store = configureStore({
   reducer: {
     loggedInUser: loggedInUserSlice,
+    deletedPageId: deletedPageIdSlice,
   },
 })
 

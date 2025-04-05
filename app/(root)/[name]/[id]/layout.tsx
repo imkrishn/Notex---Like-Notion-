@@ -3,6 +3,7 @@
 import SideBar from "@/components/SideBar";
 import { store } from "@/redux/store";
 import { Provider } from "react-redux";
+import { Toaster } from "sonner";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
 
@@ -12,6 +13,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <main className="h-screen w-screen relative flex overflow-clip">
           <SideBar />
           {children}
+          <Toaster position='top-center' richColors closeButton={true} />
         </main>
       </Provider>
     </>

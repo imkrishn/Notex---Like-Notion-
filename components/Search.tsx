@@ -2,7 +2,7 @@
 
 import { database } from '@/app/appwrite';
 import { useLoggedInUser } from '@/hooks/getLoggedInUser';
-import fetchPages from '@/lib/fetchAllPages';
+import { fetchPages } from '@/lib/fetchAllPages';
 import { RootState } from '@/redux/store';
 import { Query } from 'appwrite';
 import { useTheme } from 'next-themes'
@@ -15,35 +15,7 @@ const Search = () => {
   const loggedInUserId = useLoggedInUser().$id
 
   useEffect(() => {
-    async function fetchPages(userId: string) {
-      try {
-        const pages = await database.listDocuments(
-          process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
-          process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!,
-          [
-            Query.equal('ownerId', userId),
-          ]
-        )
 
-        const sharedWithMe = await database.listDocuments(
-          process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
-          process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_SHARED_USERS_ID!,
-          [
-            Query.equal('sharedUserId', userId)
-          ]
-        );
-
-        console.log(sharedWithMe);
-
-        const sharedWithMePages = sharedWithMe.documents.map((shared) => shared.pages)
-
-        console.log(sharedWithMePages);
-
-      } catch (Err) {
-        console.log(Err)
-
-      }
-    }
     if (loggedInUserId) {
       fetchPages(loggedInUserId)
     }

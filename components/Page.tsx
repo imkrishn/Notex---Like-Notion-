@@ -1,26 +1,176 @@
 'use client'
 
-import React, { useState } from 'react'
+import { database } from '@/app/appwrite'
+import { PageType } from '@/types/pageType'
+import { Query } from 'appwrite'
+import { ChevronDown, ChevronRight, Plus, StickyNote, Trash } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import Spinner from './Spinner'
+import { toast } from 'sonner';
+import { useRouter } from 'next/navigation'
 
-const Page = () => {
+
+const Page = (
+  { page, loggedInUserId, loggedInUserName, setDeletedId }:
+    { page?: PageType, loggedInUserId?: string, loggedInUserName?: string, setDeletedId: (id: string) => void }) => {
   const [onOver, setOnOver] = useState(false)
+  const [childrens, setChildrens] = useState<PageType[]>([]);
+  const [chevronDown, setChevronDown] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [childrenIds, setChildrenIds] = useState<string[]>([]);
+  const [deletedPageId, setDeletedPageId] = useState<string>();
+
+  const router = useRouter()
+
+
+  const viewChilds = async () => {
+    try {
+      if (!loggedInUserId) {
+        throw new Error('User is not authorized')
+      }
+
+      setLoading(true);
+      setChevronDown(true);
+      setChildrens([])
+
+      if (!childrenIds || childrenIds?.length === 0 || chevronDown) {
+        return
+      }
+
+      const childrenPages = await database.listDocuments(
+        process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
+        process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!,
+        [
+          Query.equal('$id', childrenIds),
+          Query.equal('isDeleted', false)
+        ]
+      );
+
+
+      setChildrens([...childrenPages.documents])
+    } catch (Err) {
+      console.log(Err);
+
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const addChild = async () => {
+    try {
+      if (!loggedInUserId) {
+        throw new Error('User is not authorized')
+      }
+
+      const newPage = await database.createDocument(
+        process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
+        process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!,
+        'unique()',
+        { ownerId: loggedInUserId, parentId: page?.$id }
+      );
+
+      await database.createDocument(
+        process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
+        process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_CHILDREN_PAGE_ID!,
+        'unique()',
+        { childrenPageId: newPage.$id, pages: page?.$id }
+      )
+
+      setChildrenIds((prev) => [...prev, newPage.$id]);
+      setChevronDown(true)
+
+      setChildrens((prev) => [...prev, newPage]);
+      router.push(`/${loggedInUserName}-newPage/${newPage.$id}`)
+
+
+    } catch (Err) {
+      console.log(Err);
+
+    }
+
+
+  }
+
+
+  useEffect(() => {
+    const childrenPagesIds = page?.children?.map((child) => child.childrenPageId);
+    if (childrenPagesIds && childrenPagesIds.length > 0) {
+      setChildrenIds(childrenPagesIds)
+    }
+  }, [page])
+
+
+  function onDeletePage() {
+    if (!page?.$id || !loggedInUserId) {
+      toast.error('You are not authorized to delete this page.');
+      return;
+    }
+
+    toast.warning('Are you sure?', {
+      description: 'This page will be moved to 🗑️ Trash.',
+      action: {
+        label: 'Move to Trash',
+        onClick: () => handleDelete(),
+      },
+    });
+  }
+
+  async function handleDelete() {
+    try {
+      if (!page?.$id || !loggedInUserId) {
+        toast.error('You are not authorized to delete this page.');
+        return;
+      }
+
+      await database.updateDocument(
+        process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
+        process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!,
+        page.$id,
+        { isDeleted: true }
+      );
+
+      setDeletedId(page.$id);
+      toast.success('Page moved to trash.');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete the page.');
+    }
+  }
+
+  useEffect(() => {
+    const filteredChildrens = childrens.filter((children) => children.$id !== deletedPageId);
+    setChildrens(filteredChildrens)
+
+  }, [deletedPageId])
+
 
   return (
-    <div
-      onMouseEnter={() => setOnOver(true)}
-      onMouseLeave={() => setOnOver(false)}
-      className="w-full flex items-center gap-3 rounded-sm px-3 py-1 cursor-pointer hover:bg-[#8ECAE9] hover:text-[#786B6B] active:bg-[#63A1C0]"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" width="25" height="20" stroke={onOver ? "#146ED6" : "#4DA6DE"} viewBox="0 0 24 24" fill="none" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-notepad-text">
-        <path d="M8 2v4" />
-        <path d="M12 2v4" />
-        <path d="M16 2v4" />
-        <rect width="16" height="18" x="4" y="4" rx="2" />
-        <path d="M8 10h6" />
-        <path d="M8 14h8" />
-        <path d="M8 18h5" />
-      </svg>
-      <p className="w-full text-[15px] font-[410]">Page</p>
+    <div className="w-full">
+      <div
+        onMouseEnter={() => setOnOver(true)}
+        onMouseLeave={() => setOnOver(false)}
+        className="w-full flex items-center gap-1.5 rounded-sm p-1  cursor-pointer hover:bg-[#8ECAE9] hover:text-[#786B6B] active:bg-[#63A1C0]"
+      >
+        {onOver ? (
+          !chevronDown ? <ChevronRight onClick={viewChilds} size={20} /> : <ChevronDown onClick={() => setChevronDown(false)} size={20} />
+        ) : (
+          <StickyNote color='#63A1C0' size={24} />
+        )}
+
+        <p onClick={() => router.push(`/${loggedInUserName}/${page?.$id}`)} className="w-full text-[13px] font-[410]">{page?.name ? page.name : 'Untitled'}</p>
+
+        {onOver && <Trash onClick={onDeletePage} size={20} className="hover:bg-[#63A1C0] z-20 rounded " />}
+        {onOver && <Plus onClick={addChild} className="hover:bg-[#63A1C0] z-20 rounded " size={20} />}
+      </div>
+
+      {/* Render child pages */}
+      <div className="ml-3.5 border-l-2 border-gray-300 ">
+        {loading && <span className='flex justify-center'><Spinner size={26} color='#3897E4' /></span>}
+        {chevronDown && childrens.length > 0 && !loading && childrens.map((children) => (
+          <Page key={children.$id} loggedInUserName={loggedInUserName} loggedInUserId={loggedInUserId} page={children} setDeletedId={setDeletedPageId} />
+        ))}
+        {chevronDown && childrens.length === 0 && !loading && <p className='pl-3 text-xs text-gray-500'>No Pages </p>}
+      </div>
     </div>
   )
 }
