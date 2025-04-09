@@ -69,6 +69,8 @@ const Page = (
         { ownerId: loggedInUserId, parentId: page?.$id }
       );
 
+      setChildrens((prev) => [...prev, newPage]);
+
       await database.createDocument(
         process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
         process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_CHILDREN_PAGE_ID!,
@@ -79,13 +81,12 @@ const Page = (
       setChildrenIds((prev) => [...prev, newPage.$id]);
       setChevronDown(true)
 
-      setChildrens((prev) => [...prev, newPage]);
-      router.push(`/${loggedInUserName}-newPage/${newPage.$id}`)
+
 
 
     } catch (Err) {
       console.log(Err);
-
+      toast.error('Failed to add page')
     }
 
 

@@ -20,11 +20,13 @@ export type Children = {
 
 export type PageType = {
   $id: string;
+  $createdAt: string;
   ownerId?: string;
   coverImageUrl?: string;
   name?: string;
   sharedUsersIds?: SharedUserIds[];
   blocks?: Block[];
   imgUrl?: string;
-  children?: Children[]
+  children?: Children[];
+  isDeleted?: boolean;
 }

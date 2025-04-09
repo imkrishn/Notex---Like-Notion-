@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css"; // Ensure Tailwind styles are loaded
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Notex",
@@ -31,6 +32,7 @@ export default function RootLayout({
     <html lang="en" className={Roboto.variable}>
       <body className="font-roboto antialiased">
         <ThemeProvider>{children}</ThemeProvider>
+        <Toaster position='top-center' richColors closeButton={true} />
       </body>
     </html>
   );

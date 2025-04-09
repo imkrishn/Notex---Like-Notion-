@@ -5,6 +5,54 @@
 }
 
 
+:root {
+  --background: 187 28% 95%;
+  --foreground: 187 5% 10%;
+  --card: 187 28% 93%;
+  --card-foreground: 187 5% 15%;
+  --popover: 187 28% 95%;
+  --popover-foreground: 187 95% 10%;
+  --primary: 187 61% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 187 28% 90%;
+  --secondary-foreground: 0 0% 0%;
+  --muted: 149 28% 93%;
+  --muted-foreground: 187 5% 40%;
+  --accent: 149 28% 90%;
+  --accent-foreground: 187 5% 15%;
+  --destructive: 0 50% 50%;
+  --destructive-foreground: 187 5% 93%;
+  --border: 187 28% 82%;
+  --input: 187 28% 50%;
+  --ring: 187 61% 58%;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 187 28% 10%;
+  --foreground: 187 5% 93%;
+  --card: 187 28% 10%;
+  --card-foreground: 187 5% 93%;
+  --popover: 187 28% 5%;
+  --popover-foreground: 187 5% 93%;
+  --primary: 187 61% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 187 28% 20%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 149 28% 25%;
+  --muted-foreground: 187 5% 65%;
+  --accent: 149 28% 25%;
+  --accent-foreground: 187 5% 93%;
+  --destructive: 0 50% 50%;
+  --destructive-foreground: 187 5% 93%;
+  --border: 187 28% 50%;
+  --input: 187 28% 50%;
+  --ring: 187 61% 58%;
+  --radius: 0.5rem;
+}
+
+
+
 body {
   font-family: var(--font-roboto);
 }

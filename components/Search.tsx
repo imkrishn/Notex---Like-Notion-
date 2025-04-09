@@ -2,47 +2,96 @@
 
 import { database } from '@/app/appwrite';
 import { useLoggedInUser } from '@/hooks/getLoggedInUser';
-import { fetchPages } from '@/lib/fetchAllPages';
-import { RootState } from '@/redux/store';
+import { useGetPages, useGetSharedPages } from '@/hooks/getPages';
+import formatTime from '@/lib/formatTime';
 import { Query } from 'appwrite';
+import { RotateCcw, StickyNote, Trash } from 'lucide-react';
 import { useTheme } from 'next-themes'
+import { useRouter } from 'next/navigation';
 import React, { useEffect, useState } from 'react'
-import { useSelector } from 'react-redux';
+import { toast } from 'sonner';
 
-const Search = () => {
+
+const Search = ({ setIsSearch }: { setIsSearch: (value: boolean) => void }) => {
   const { theme } = useTheme();
+  const router = useRouter()
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const loggedInUserId = useLoggedInUser().$id
+  const loggedInUser = useLoggedInUser()
+  const loggedInUserId = loggedInUser.$id;
+  const { pages, hasMore, loadMore, loading, setPages } = useGetPages(loggedInUserId);
+  const { sharedPages, hasMore: sharedHasMore, loading: sharedLoading, loadMore: sharedLoadMore } = useGetSharedPages(loggedInUserId);
 
-  useEffect(() => {
 
-    if (loggedInUserId) {
-      fetchPages(loggedInUserId)
+  async function onSearch(e: React.ChangeEvent<HTMLInputElement>) {
+    try {
+      const query = e.target.value;
+
+      if (!query.trim() || !loggedInUserId) {
+        return
+      }
+
+      const result = await database.listDocuments(
+        process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
+        process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!,
+        [
+          Query.contains('name', query),
+          Query.equal('ownerId', loggedInUserId)
+        ]
+      );
+
+      setPages(result.documents)
+
+    } catch (err) {
+      console.log(err);
+      toast.error('Failed to Search')
     }
-  }, [loggedInUserId, fetchPages])
-
-  console.log(loggedInUserId);
+  }
 
   return (
     <div className='fixed inset-0 flex justify-center items-center z-[99999]'>
       <div className='absolute inset-0 bg-black/30 backdrop-blur-sm'></div>
-      <div className='relative w-1/2 h-[70%] bg-[#cecece] rounded shadow shadow-gray-500 p-4 py-7'>
-        <input type='text' placeholder="Search Your's Pages" className='outline-none border w-full rounded-lg px-3 py-1' />
-        <div className='py-4'>
-          {['How to grow', 'Learn coding', 'Next.js tips'].map((page, index) => (
+      <div className='relative lg:w-1/3 h-[70%] bg-[#ffffff] rounded shadow shadow-gray-500 p-4 py-7'>
+        <input onChange={onSearch} type='text' placeholder="Search Your's Pages" className='outline-none border w-full rounded-lg px-3 py-1' />
+        <div className='py-4 select-none overflow-auto h-full pr-2'>
+          <h2 className='font-bold text-sm'>Personal</h2>
+          {pages.length === 0 && !loading ? <p className='text-sm'>No Data found</p> : pages.map((page, index) => (
             <div
-              key={index}
+              onClick={() => {
+                router.push(`/${loggedInUser.fullName}/${page.$id}`);
+                setIsSearch(false);
+              }}
+              key={page.$id}
               onMouseEnter={() => setHoveredIndex(index)}
               onMouseLeave={() => setHoveredIndex(null)}
-              className={`flex items-center gap-2 px-2 py-1 cursor-pointer ${hoveredIndex === index ? 'bg-[#b8b4b4]' : ''
+              className={`flex items-center gap-2 px-2 py-1 cursor-pointer ${hoveredIndex === index ? 'bg-[#3f3a3a60]' : ''
                 }`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="44" height="38" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} viewBox="0 0 24 24" fill="none" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-venetian-mask"><path d="M18 11c-1.5 0-2.5.5-3 2" /><path d="M4 6a2 2 0 0 0-2 2v4a5 5 0 0 0 5 5 8 8 0 0 1 5 2 8 8 0 0 1 5-2 5 5 0 0 0 5-5V8a2 2 0 0 0-2-2h-3a8 8 0 0 0-5 2 8 8 0 0 0-5-2z" /><path d="M6 11c1.5 0 2.5.5 3 2" /></svg>
-
-              <p className='w-full'>{page}</p>
-              {hoveredIndex !== index && <p className='whitespace-nowrap text-sm'>25 March</p>}
+              <StickyNote size={30} color='#37b5e7' />
+              <p className='w-full text-sm font-medium'>{page.name}</p>
+              {/*               {hoveredIndex === index && (page.isDeleted ? <RotateCcw size={20} color='#199119ef' /> : <Trash size={20} color='#d13838ec' />)}
+ */}              {hoveredIndex !== index && <p className='whitespace-nowrap text-xs'>{formatTime(page.$createdAt)}</p>}
             </div>
+
           ))}
+          {hasMore && <p onClick={loadMore} className='px-2 py-1 text-xs font-medium cursor-pointer active:scale-[.98]'>{loading ? '...Loading' : '...Load More'}</p>}
+
+          {sharedPages.length > 0 && <h2 className='font-bold text-sm py-1'>Shared With me</h2>}
+          {sharedPages.map((page, index) => (
+            <div
+              key={page.$id}
+              onMouseEnter={() => setHoveredIndex(index)}
+              onMouseLeave={() => setHoveredIndex(null)}
+              className={`flex items-center gap-2 px-2 py-1 cursor-pointer ${hoveredIndex === index ? 'bg-[#3f3a3a60]' : ''
+                }`}
+            >
+              <StickyNote size={30} color='#37b5e7' />
+              <p className='w-full'>{page.name}</p>
+              {hoveredIndex !== index && <p className='whitespace-nowrap text-xs'>{formatTime(page.$createdAt)}</p>}
+            </div>
+
+          ))}
+          {sharedHasMore && sharedPages.length > 1 && <p onClick={sharedLoadMore} className='px-2 py-1 text-xs font-medium cursor-pointer active:scale-[.98]'>{sharedLoading ? '...Loading' : '...Load More'}</p>}
+
         </div>
       </div>
     </div>
