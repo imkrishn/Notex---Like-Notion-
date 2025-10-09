@@ -7,13 +7,15 @@ import { ChevronDown, ChevronRight, Plus, StickyNote, Trash } from 'lucide-react
 import React, { useEffect, useState } from 'react'
 import Spinner from './Spinner'
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { cn } from '@/lib/utils'
 
 
 const Page = (
   { page, loggedInUserId, loggedInUserName, setDeletedId }:
     { page?: PageType, loggedInUserId?: string, loggedInUserName?: string, setDeletedId: (id: string) => void }) => {
-  const [onOver, setOnOver] = useState(false)
+  const [onOver, setOnOver] = useState(false);
+  const params = usePathname().split('/')
   const [childrens, setChildrens] = useState<PageType[]>([]);
   const [chevronDown, setChevronDown] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -114,7 +116,12 @@ const Page = (
         onClick: () => handleDelete(),
       },
     });
+
   }
+
+
+
+
 
   async function handleDelete() {
     try {
@@ -127,10 +134,11 @@ const Page = (
         process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
         process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!,
         page.$id,
-        { isDeleted: true }
+        { isDeleted: true, deletedAt: new Date().toISOString() }
       );
 
       setDeletedId(page.$id);
+      router.push(`/${loggedInUserName}/home`)
       toast.success('Page moved to trash.');
     } catch (err) {
       console.error(err);
@@ -150,7 +158,7 @@ const Page = (
       <div
         onMouseEnter={() => setOnOver(true)}
         onMouseLeave={() => setOnOver(false)}
-        className="w-full flex items-center gap-1.5 rounded-sm p-1  cursor-pointer hover:bg-[#8ECAE9] hover:text-[#786B6B] active:bg-[#63A1C0]"
+        className={cn("w-full flex items-center gap-1.5 rounded-sm p-1 m-0.5 cursor-pointer hover:bg-[#8ECAE9] hover:text-[#786B6B] active:bg-[#63A1C0]", params[2] === page?.$id && 'bg-[#baddee]')}
       >
         {onOver ? (
           !chevronDown ? <ChevronRight onClick={viewChilds} size={20} /> : <ChevronDown onClick={() => setChevronDown(false)} size={20} />
@@ -158,7 +166,10 @@ const Page = (
           <StickyNote color='#63A1C0' size={24} />
         )}
 
-        <p onClick={() => router.push(`/${loggedInUserName}/${page?.$id}`)} className="w-full text-[13px] font-[410]">{page?.name ? page.name : 'Untitled'}</p>
+        <p onClick={() => {
+          localStorage.removeItem('menu');
+          router.push(`/${loggedInUserName}/${page?.$id}`);
+        }} className="w-full text-[13px] font-[410]">{page?.name ? page.name : 'Untitled'}</p>
 
         {onOver && <Trash onClick={onDeletePage} size={20} className="hover:bg-[#63A1C0] z-20 rounded " />}
         {onOver && <Plus onClick={addChild} className="hover:bg-[#63A1C0] z-20 rounded " size={20} />}

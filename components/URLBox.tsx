@@ -6,6 +6,8 @@ import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import { Upload } from 'lucide-react';
 import React, { useState, forwardRef } from 'react';
 import Spinner from './Spinner';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 type Props = {
   setObjectClick: (value: boolean) => void;
@@ -31,7 +33,7 @@ const URLBox = forwardRef<HTMLDivElement, Props>(({ setObjectClick, className, i
   }
 
   const getButtonClass = (type: Click) =>
-    `px-3 py-1 rounded-md cursor-pointer hover:bg-[#888585] ${onClick === type ? 'bg-[#888585]' : ''}`;
+    `px-3 py-1  font-medium cursor-pointer hover:bg-[#131313] hover:text-white ${onClick === type ? 'border-b-4 border-black' : ''}`;
 
   const handleEmojiClick = async (emojiData: EmojiClickData) => {
     try {
@@ -40,6 +42,7 @@ const URLBox = forwardRef<HTMLDivElement, Props>(({ setObjectClick, className, i
       await updatePageData(pageId, { imgUrl: emojiData.imageUrl });
     } catch (error) {
       console.error('Error updating emoji:', error);
+      toast.error('Failed,try again')
     } finally {
       setLoading(false)
       setObjectClick(false);
@@ -61,6 +64,7 @@ const URLBox = forwardRef<HTMLDivElement, Props>(({ setObjectClick, className, i
       }
     } catch (error) {
       console.error('File upload failed:', error);
+      toast.error('failed to upload .Try again')
     } finally {
       setLoading(false)
       setObjectClick(false);
@@ -77,7 +81,7 @@ const URLBox = forwardRef<HTMLDivElement, Props>(({ setObjectClick, className, i
 
   return (
     <>
-      {loading ? <div ref={ref} className={`${className} min-w-48 flex justify-center rounded z-[99999] p-2 bg-white`}><Spinner size={40} color='#4e91df' /></div> : <div ref={ref} className={`${className} rounded z-[99999] p-2 bg-white`}>
+      {loading ? <div ref={ref} className={cn('min-w-48 flex justify-center rounded z-[99999] p-2 bg-white', className)}><Spinner size={40} color='#4e91df' /></div> : <div ref={ref} className={`${className} rounded z-[99999] p-2 bg-white`}>
         <div className='flex gap-4'>
           {isEmoji && <button onClick={() => setOnClick('emoji')} className={getButtonClass('emoji')}>Emojis</button>}
           {isLink && <button onClick={() => setOnClick('link')} className={getButtonClass('link')}>Link</button>}
@@ -96,13 +100,13 @@ const URLBox = forwardRef<HTMLDivElement, Props>(({ setObjectClick, className, i
                 placeholder='Paste any Image link...'
                 className='text-sm rounded outline-none border px-3 py-1 w-full'
               />
-              <button onClick={handleLink} className='bg-[#3891e6] text-[#474849] cursor-pointer rounded-lg px-4 py-1'>Submit</button>
+              <button onClick={handleLink} className='bg-[#3891e6] text-[#ededee] font-medium cursor-pointer rounded-lg px-4 py-1'>Submit</button>
             </div>
           )}
 
           {onClick === 'upload' && (
             <div className='border border-[#e0e0e0] rounded-lg p-4 w-[350px]'>
-              <label className='cursor-pointer bg-[#bfc3c7] text-[#474849] rounded w-full flex gap-2 items-center justify-center py-2'>
+              <label className='cursor-pointer bg-[#5a5a5a2f] text-[#474849] rounded-2xl w-full flex gap-2 items-center justify-center py-2'>
                 <Upload size={20} />
                 Upload File
                 <input onChange={handleFile} type='file' accept={accept} className='hidden' />

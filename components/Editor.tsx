@@ -4,10 +4,14 @@ import { Block } from "@blocknote/core";
 import { BlockNoteView } from "@blocknote/mantine";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
+import "@liveblocks/react-ui/styles.css";
+import "@liveblocks/react-ui/styles/dark/media-query.css";
+import "@liveblocks/react-tiptap/styles.css";
 import { useCreateBlockNoteWithLiveblocks } from "@liveblocks/react-blocknote";
 import { ID, Query } from "appwrite";
 import { useTheme } from "next-themes";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, Dispatch, SetStateAction } from "react";
+import { useCreateBlockNote } from "@blocknote/react";
 
 const DB_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_BLOCK_ID!;
@@ -23,7 +27,7 @@ const uploadFile = async (file: File) => {
   }
 };
 
-const Editor = ({ pageId }: { pageId: string }) => {
+const Editor = ({ pageId, edit, setText }: { pageId: string, edit: boolean, setText: Dispatch<SetStateAction<string | undefined>> }) => {
   const [initialBlocks, setInitialBlocks] = useState<Block[] | null>(null);
   const { theme } = useTheme();
   const isProcessing = useRef(false);
@@ -39,6 +43,8 @@ const Editor = ({ pageId }: { pageId: string }) => {
         Query.orderAsc('position'),
       ]);
       const blocks = response.documents.map((doc) => JSON.parse(doc.content));
+
+
       setInitialBlocks(blocks);
       previousBlocks.current = blocks;
       currentPageId.current = pageId;
@@ -52,10 +58,15 @@ const Editor = ({ pageId }: { pageId: string }) => {
     loadInitialBlocks();
   }, [loadInitialBlocks]);
 
-  const editor = useCreateBlockNoteWithLiveblocks({
+  const editor = !edit ? useCreateBlockNote({
     initialContent: initialBlocks || undefined,
     uploadFile
-  });
+  }) : useCreateBlockNoteWithLiveblocks({
+    initialContent: initialBlocks || undefined,
+    uploadFile
+  }, { mentions: true });
+
+
 
   useEffect(() => {
     if (timeoutRef.current) {
@@ -121,6 +132,11 @@ const Editor = ({ pageId }: { pageId: string }) => {
     async (latestPageId: string) => {
       if (!editor) return;
       const currentBlocks = editor.document;
+      console.log(currentBlocks);
+
+      /* const plainText = currentBlocks
+    ?.map(block => block.content?((inline: any) => inline.text).join('') || '')
+    .join('\n'); */
 
       if (latestPageId === currentPageId.current) {
         await saveAllBlocks(currentBlocks);
@@ -151,11 +167,11 @@ const Editor = ({ pageId }: { pageId: string }) => {
   }, [editor, debouncedHandleChange]);
 
   return (
-    <div className="w-full max-w-full py-8">
+    <div className="w-full max-w-full h-full py-8">
       <BlockNoteView
         editor={editor}
         theme={theme === 'dark' ? 'dark' : 'light'}
-        editable={true}
+        editable={edit}
         formattingToolbar={true}
       />
     </div>

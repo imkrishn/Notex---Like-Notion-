@@ -4,15 +4,16 @@ import { database } from '@/app/appwrite';
 import { useLoggedInUser } from '@/hooks/getLoggedInUser';
 import { useGetPages, useGetSharedPages } from '@/hooks/getPages';
 import formatTime from '@/lib/formatTime';
+import { Menu } from '@/types/menuType';
 import { Query } from 'appwrite';
-import { RotateCcw, StickyNote, Trash } from 'lucide-react';
+import { CircleX, RotateCcw, StickyNote, Trash } from 'lucide-react';
 import { useTheme } from 'next-themes'
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useState } from 'react'
+import React, { Dispatch, SetStateAction, useEffect, useState } from 'react'
 import { toast } from 'sonner';
 
 
-const Search = ({ setIsSearch }: { setIsSearch: (value: boolean) => void }) => {
+const Search = ({ setMenu }: { setMenu: Dispatch<SetStateAction<Menu>> }) => {
   const { theme } = useTheme();
   const router = useRouter()
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
@@ -50,15 +51,16 @@ const Search = ({ setIsSearch }: { setIsSearch: (value: boolean) => void }) => {
   return (
     <div className='fixed inset-0 flex justify-center items-center z-[99999]'>
       <div className='absolute inset-0 bg-black/30 backdrop-blur-sm'></div>
-      <div className='relative lg:w-1/3 h-[70%] bg-[#ffffff] rounded shadow shadow-gray-500 p-4 py-7'>
-        <input onChange={onSearch} type='text' placeholder="Search Your's Pages" className='outline-none border w-full rounded-lg px-3 py-1' />
-        <div className='py-4 select-none overflow-auto h-full pr-2'>
+      <div className='relative lg:w-1/2 h-[80%] w-[90%] overflow-auto bg-[#fff] rounded shadow shadow-gray-500 p-4 pt-2 '>
+        <CircleX size={20} color='#3089bd' className='absolute right-4 my-2 cursor-pointer' onClick={() => setMenu('Personal')} />
+        <input onChange={onSearch} type='text' placeholder="Search Your's Pages" className='mt-9  outline-none border w-full rounded-lg px-3 py-1' />
+        <div className='py-4 select-none  h-full pr-2'>
           <h2 className='font-bold text-sm'>Personal</h2>
           {pages.length === 0 && !loading ? <p className='text-sm'>No Data found</p> : pages.map((page, index) => (
             <div
               onClick={() => {
                 router.push(`/${loggedInUser.fullName}/${page.$id}`);
-                setIsSearch(false);
+                setMenu('Personal');
               }}
               key={page.$id}
               onMouseEnter={() => setHoveredIndex(index)}
@@ -73,7 +75,7 @@ const Search = ({ setIsSearch }: { setIsSearch: (value: boolean) => void }) => {
             </div>
 
           ))}
-          {hasMore && <p onClick={loadMore} className='px-2 py-1 text-xs font-medium cursor-pointer active:scale-[.98]'>{loading ? '...Loading' : '...Load More'}</p>}
+          {hasMore && <p onClick={() => loadMore} className='px-2 py-1 text-xs font-medium cursor-pointer active:scale-[.98]'>{loading ? '...Loading' : '...Load More'}</p>}
 
           {sharedPages.length > 0 && <h2 className='font-bold text-sm py-1'>Shared With me</h2>}
           {sharedPages.map((page, index) => (
