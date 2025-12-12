@@ -1,39 +1,44 @@
-'use client'
-
-import { useMyPresence, useOthers } from "@liveblocks/react"
+"use client";
 import React from "react";
-import FollowPointer from "./FollowPointer";
+import Pointer from "./Pointer";
+import { useOthers, useMyPresence } from "@liveblocks/react/suspense";
 
-const LiveCursorPointer = ({ children }: { children: React.ReactNode }) => {
-  const [myPresence, updateMyPresence] = useMyPresence();
-  const others = useOthers()
+export default function LiveCursorProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const [myPresence, setMyPresence] = useMyPresence();
 
-  function handleMouseMove(e: React.PointerEvent<HTMLDivElement>) {
-    const cursor = { x: Math.floor(e.pageX), y: Math.floor(e.pageY) };
+  const others = useOthers();
 
-    updateMyPresence({ cursor })
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const cursor = {
+      x: Math.floor(e.pageX),
+      y: Math.floor(e.pageY),
+    };
+
+    setMyPresence({ cursor });
   }
 
-  function handleMouseLeave(e: React.PointerEvent<HTMLDivElement>) {
-    const cursor = null;
-    updateMyPresence({ cursor })
+  function handlePointerLeave() {
+    setMyPresence({ cursor: null });
   }
-
 
   return (
-    <div onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave} className="w-full">
-      {others.filter((other) => other.presence.cursor !== null).map(({ info, presence, connectionId }) => (
-        <FollowPointer
-          key={connectionId}
-          info={info}
-          x={presence.cursor?.x}
-          y={presence.cursor?.y}
-        />
-      ))}
+    <div onPointerMove={handlePointerMove} onPointerLeave={handlePointerLeave}>
+      {others
+        .filter((other) => other.presence.cursor !== null)
+        .map(({ connectionId, presence, info }) => (
+          <Pointer
+            key={connectionId}
+            info={info}
+            x={presence.cursor!.x}
+            y={presence.cursor!.y}
+          />
+        ))}
 
       {children}
     </div>
-  )
+  );
 }
-
-export default LiveCursorPointer

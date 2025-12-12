@@ -1,276 +1,500 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { useTheme } from "next-themes";
-import Page from "./Page";
-import { database } from "@/app/appwrite";
-import fetchUserLoggedInUser from "@/lib/fetchLoggedInUser";
 import { useRouter } from "next/navigation";
-import { useDispatch } from "react-redux";
-import { AppDispatch } from "@/redux/store";
-import { setLoggedInUser } from "@/redux/slices/loggedInUser";
-import { useLoggedInUser } from "@/hooks/getLoggedInUser";
+
+import { useGetLoggedinUser } from "@/hooks/getLoggedInUser";
 import Spinner from "./Spinner";
 import { PageType } from "@/types/pageType";
-import { Query } from "appwrite";
 import { toast } from "sonner";
 import Search from "./Search";
-import { ChevronsLeft, ChevronsRight } from "lucide-react";
-import { useMediaQuery } from 'usehooks-ts'
+import {
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronUp,
+  FilePlus,
+  Home,
+  Search as SearchIcon,
+  Trash2,
+  VenetianMask,
+  Waypoints,
+  File,
+} from "lucide-react";
+import { useMediaQuery } from "usehooks-ts";
 import { cn } from "@/lib/utils";
 import Trash from "./Trash";
 import { Menu } from "@/types/menuType";
+import { databases } from "@/app/(root)/appwrite";
+import { ID, Query } from "appwrite";
+import Page from "./Page";
+import ThemeToggle from "./ThemeToggle";
+import { useTheme } from "next-themes";
 
-
-
-const SideBar = () => {
+export default function SideBar() {
   const router = useRouter();
-  const dispatch = useDispatch<AppDispatch>();
   const isMobile = useMediaQuery("(max-width:768px)");
-
-  const { $id, fullName, email } = useLoggedInUser();
-  const { theme, setTheme } = useTheme();
+  const { id, email, name } = useGetLoggedinUser();
   const isResizing = useRef(false);
-  const sideBarRef = useRef<HTMLDivElement>(null)
+  const sideBarRef = useRef<HTMLDivElement | null>(null);
 
   const [isPersonal, setIsPersonal] = useState(true);
-  const [profile, setProfile] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [pages, setPages] = useState<PageType[]>([]);
-  const [deletedPageId, setDeletedPageId] = useState<string | undefined>();
-  const [onCreatePageLoading, setOnCreatePageLoading] = useState<boolean>(false);
-  const [sidebarWidth, setSidebarWidth] = useState<string>(isMobile ? 'w-0' : 'min-w-72')
-  const [menu, setMenu] = useState<Menu>(() => {
-    const menuValue = localStorage.getItem('menu');
-    return menuValue ? JSON.parse(menuValue) : null
-  });
+  const [deletedPageId, setDeletedPageId] = useState<string | undefined>(
+    undefined
+  );
+  const [onCreatePageLoading, setOnCreatePageLoading] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState<string>(
+    isMobile ? "w-1" : "min-w-72"
+  );
 
+  const [menu, setMenuState] = useState<Menu | null>(null);
 
+  const setMenu = (m: Menu | null) => {
+    try {
+      if (typeof window !== "undefined")
+        localStorage.setItem("menu", JSON.stringify(m));
+    } catch (e) {}
+    setMenuState(m);
+  };
+
+  // initialize menu and sidebar width from localStorage
   useEffect(() => {
-    dispatch(setLoggedInUser({ $id, fullName, email }))
-  }, [useLoggedInUser])
-
-  useEffect(() => {
-    setTheme('light');
-    const storedMenu = localStorage.getItem('menu');
-    if (storedMenu) setMenu(JSON.parse(storedMenu))
-  }, []);
-
-  useEffect(() => {
-    const filteredChildrens = pages.filter((children) => children.$id !== deletedPageId);
-    setPages(filteredChildrens)
-  }, [deletedPageId])
-
-  useEffect(() => {
-
-    async function fetchPages(userId: string) {
+    if (typeof window === "undefined") return;
+    const menuValue = localStorage.getItem("menu");
+    if (menuValue) {
       try {
-        const thePages = await database.listDocuments(
-          process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
-          process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!,
-          [
-            Query.equal('ownerId', userId),
-            Query.isNull('parentId'),
-            Query.equal('isDeleted', false)
-          ]
-        )
-        setPages(thePages.documents)
-
-
-      } catch (Err) {
-        console.log(Err)
-
+        setMenuState(JSON.parse(menuValue));
+      } catch (e) {
+        setMenuState(null);
       }
     }
-
-
-
-    if ($id) {
-      fetchPages($id);
-
+    const savedWidth = localStorage.getItem("sidebarWidth");
+    if (savedWidth) {
+      setSidebarWidth(savedWidth);
+      if (sideBarRef.current) sideBarRef.current.style.width = savedWidth;
     }
+  }, []);
 
-  }, [$id, isPersonal]);
+  // persist width on change
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem("sidebarWidth", sidebarWidth);
+    } catch (e) {}
+  }, [sidebarWidth]);
 
+  //sync ui on delete page
 
-  function onPersonalClick() {
-    setIsPersonal(prev => !prev)
-    setMenu('Personal')
-    localStorage.setItem('menu', JSON.stringify('Personal'))
-  }
+  useEffect(() => {
+    if (!deletedPageId) return;
+    setPages((prev) => prev.filter((c) => c.$id !== deletedPageId));
+  }, [deletedPageId]);
 
-  function onProfileClick() {
-    setProfile(prev => !prev)
+  // fetch user's pages
 
-  }
+  useEffect(() => {
+    let mounted = true;
+    const fetchPages = async () => {
+      try {
+        const DB_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
+        const PAGE_COLLECTION =
+          process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!;
 
-  function onHomeCLick() {
-    router.push(`/${fullName}/home`)
-    setMenu('Home')
-    localStorage.setItem('menu', JSON.stringify('Home'))
-  }
+        const res = await (databases as any).listRows({
+          databaseId: DB_ID,
+          tableId: PAGE_COLLECTION,
+          queries: [
+            Query.equal("isDeleted", false),
+            Query.equal("ownerId", id),
+            Query.isNull("parentId"),
+            Query.orderDesc("$updatedAt"),
+          ],
+        });
 
-  function onSharedWithMeClick() {
-    router.push(`/${fullName}/shared`)
-    setMenu('Shared')
-    localStorage.setItem('menu', JSON.stringify('Shared'))
-  }
+        const rows = res.rows;
+        if (mounted) setPages(rows || []);
+      } catch (err) {
+        console.debug("fetchPages error:", err);
+        toast.error("Failed to load pages.");
+      }
+    };
+    if (id) fetchPages();
+    return () => {
+      mounted = false;
+    };
+  }, [id]);
+
+  // create a new page
 
   async function onCreatePage() {
     try {
-      setOnCreatePageLoading(true)
-      setMenu('Create');
+      setOnCreatePageLoading(true);
+      setMenuState("Create");
 
-      const { $id, fullName, email } = await fetchUserLoggedInUser()
-      const newPage = await database.createDocument(
-        process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
-        process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!,
-        'unique()',
-        { ownerId: $id }
-      );
+      const newPage = await databases.createRow({
+        databaseId: process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
+        tableId: process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_PAGE_ID!,
+        rowId: ID.unique(),
+        data: { ownerId: id },
+      });
 
-      await database.createDocument(
-        process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
-        process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_SHARED_USERS_ID!,
-        'unique()',
-        {
-          pages: newPage.$id,
-          ownerId: $id,
-          sharedUserId: $id,
-          permission: 'All',
-          email
-        }
-      )
+      await databases.createRow({
+        databaseId: process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
+        tableId: process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_SHARED_PAGES_ID!,
+        rowId: ID.unique(),
+        data: {
+          pageId: newPage.$id,
+          ownerId: id,
+          sharedUserId: id,
+          permission: "FULL_ACCESS",
+          email,
+          active: true,
+        },
+      });
 
-      toast.success('New Page Created.');
+      toast.success("New page created");
 
-      if (newPage) setPages(prev => [...prev, newPage])
+      setPages((prev) => (newPage ? [...prev, newPage] : prev));
 
-      router.push(`/${fullName}/${newPage.$id}`)
-
-
+      router.push(`/page/${newPage.$id}`);
     } catch (err) {
-      console.log(err);
-
+      console.error(err);
+      toast.error("Couldn't create page — try again");
     } finally {
-      setOnCreatePageLoading(false)
-      localStorage.setItem('menu', JSON.stringify('Create'))
-
+      setOnCreatePageLoading(false);
     }
   }
 
+  //resize sidebar width
 
-  const mouseDown = (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+  const mouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
-    e.stopPropagation()
-
+    e.stopPropagation();
     isResizing.current = true;
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-
-  }
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isResizing.current) return;
-
     let newWidth = e.clientX;
-
     if (newWidth < 288) newWidth = 288;
-    if (newWidth > 800) newWidth = 1000;
+    if (newWidth > 1000) newWidth = 1000;
     if (sideBarRef.current) {
-      sideBarRef.current.style.width = `${newWidth}px`
-      setSidebarWidth(`${newWidth}px`)
+      sideBarRef.current.style.width = `${newWidth}px`;
+      setSidebarWidth(`${newWidth}px`);
     }
+  };
 
-
-
-
-  }
-
-  const handleMouseUp = (e: MouseEvent) => {
-    isResizing.current = false
-
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp)
-  }
+  const handleMouseUp = () => {
+    isResizing.current = false;
+    document.removeEventListener("mousemove", handleMouseMove);
+    document.removeEventListener("mouseup", handleMouseUp);
+  };
 
   const onChevronLeftClick = () => {
     if (sideBarRef.current) {
-      sideBarRef.current.style.width = '0px'
-      setSidebarWidth('w-0')
+      sideBarRef.current.style.width = "3px";
+      setSidebarWidth("w-1");
+    }
+  };
+
+  //logout functionality
+
+  async function logout() {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+      toast.success("Logged out successfully");
+      window.location.href = "/";
+    } catch (err) {
+      console.error("Logout failed:", err);
+      toast.error("Logout failed. Please try again.");
     }
   }
 
-
-
+  // keyboard accessibility: toggle sidebar with Esc when open on mobile
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isMobile && sidebarWidth !== "w-0") {
+        if (sideBarRef.current) sideBarRef.current.style.width = "0px";
+        setSidebarWidth("w-0");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isMobile, sidebarWidth]);
 
   return (
-    <aside className={cn('relative', sidebarWidth)} ref={sideBarRef}>
-      {sidebarWidth !== 'w-0' ? <div className={`${theme === "dark" ? "bg-[#050505] text-[#786B6B] shadow-gray-400" : "bg-[#FFFFFF] text-[#928989]"} ${isMobile && 'fixed w-full z-[999999]'} p-4 h-screen before:pointer-events-none shadow-lg before:absolute before:inset-0  before:shadow-[inset_0_0_10px_rgba(0,0,0,0.3)] `}>
-        {onCreatePageLoading && <div className="absolute  w-screen h-screen z-[99999] opacity-70 flex items-center bg-amber-50 justify-center text-2xl font-bold text-[#706b6b] ">
-          <p className="grid grid-cols-2 items-center w-max"><Spinner size={30} color="#3897E4" />Creating...</p></div>}
-        {menu === 'Search' && <Search setMenu={setMenu} />}
-        {menu === 'Trash' && <Trash setMenu={setMenu} />}
+    <aside
+      ref={sideBarRef}
+      className={cn(
+        " h-screen transition-all  duration-200 ease-in-out ",
+        sidebarWidth
+      )}
+      aria-label="Main sidebar"
+    >
+      <div className="relative w-full h-full">
+        {sidebarWidth !== "w-1" ? (
+          <div
+            className={`p-4 bg-(--sidebar-background) text-(--sidebar-foreground) h-screen shadow-lg ${
+              isMobile ? "fixed w-full z-50" : ""
+            } flex flex-col gap-4`}
+          >
+            {/* Conditional menus */}
+            {menu === "Search" && (
+              <Search
+                setMenu={
+                  setMenu as React.Dispatch<React.SetStateAction<string>>
+                }
+              />
+            )}
+            {menu === "Trash" && (
+              <Trash
+                setMenu={setMenu as React.Dispatch<React.SetStateAction<Menu>>}
+              />
+            )}
 
-        <nav className="flex items-end gap-1">
-          <p className="text-4xl font-black text-[#3897E4]">N</p>
-          <p className="text-2xl font-black text-[#30C24B]">otex</p>
-        </nav>
-        <ChevronsLeft onClick={onChevronLeftClick} className="absolute right-4 top-4 cursor-pointer active:scale-95" size={20} color="#838383" />
+            {/* Brand */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-end gap-1 select-none">
+                <p className="text-4xl font-black text-(--color-primary)">N</p>
+                <p className="text-2xl font-black text-[#30C24B]">otex</p>
+              </div>
+              <button
+                aria-label="Collapse sidebar"
+                onClick={onChevronLeftClick}
+                className="p-1 rounded hover:bg-black/5 active:scale-95"
+              >
+                <ChevronsLeft size={20} color="var(--sidebar-foreground)" />
+              </button>
+            </div>
 
-        <div className="flex flex-col my-4 select-none gap-0.5">
-          <div onClick={onHomeCLick} className={` ${menu === 'Home' && 'bg-[#8ECAE9]'} w-full flex items-center  gap-3 rounded-sm px-3 py-0.5 cursor-pointer hover:bg-[#8ECAE9] hover:text-[#786B6B] active:bg-[#63A1C0]`}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="25" viewBox="0 0 24 24" fill="none" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-house "><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" /><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-            <p className="w-full text-[14px] font-[410]">Home</p>
-          </div>
-          <div onClick={() => setMenu('Search')} className={` ${menu === 'Search' && 'bg-[#8ECAE9]'} w-full flex items-center  gap-3 rounded-sm px-3 py-0.5 cursor-pointer hover:bg-[#8ECAE9] hover:text-[#786B6B] active:bg-[#63A1C0]`}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="25" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} viewBox="0 0 24 24" fill="none" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-search"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
-            <p className="w-full text-[14px] font-[410]">Search</p>
-          </div>
-          {/* <div className={` ${menu === 'Favourite' && 'bg-[#8ECAE9]'} w-full flex items-center  gap-3 rounded-sm px-3 py-0.5 cursor-pointer hover:bg-[#8ECAE9] hover:text-[#786B6B] active:bg-[#63A1C0]`}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="25" stroke="#F57B11" viewBox="0 0 24 24" fill="none" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-star"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg>
-            <p className="w-full text-[14px] font-[410]">Favourites</p>
-          </div> */}
-          <div onClick={() => setMenu('Trash')} className={` ${menu === 'Trash' && 'bg-[#8ECAE9]'} w-full flex items-center  gap-3 rounded-sm px-3 py-0.5 cursor-pointer hover:bg-[#8ECAE9] hover:text-[#786B6B] active:bg-[#63A1C0]`}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="25" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} viewBox="0 0 24 24" fill="none" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
-            <p className="w-full text-[14px]  font-[410]">Trash</p>
-          </div>
-          <div className={` ${menu === 'Create' && 'bg-[#8ECAE9]'} w-full flex items-center  gap-3 rounded-sm px-3 py-0.5 cursor-pointer hover:bg-[#8ECAE9] hover:text-[#786B6B] active:bg-[#63A1C0]`}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="25" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} viewBox="0 0 24 24" fill="none" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-plus"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M9 15h6" /><path d="M12 18v-6" /></svg>
-            <p onClick={onCreatePage} className="w-full text-[14px] font-[410]">Create New</p>
-          </div>
-          <div onClick={onSharedWithMeClick} className={` ${menu === 'Shared' && 'bg-[#8ECAE9]'} w-full flex items-center  gap-3 rounded-sm px-3 py-0.5 cursor-pointer hover:bg-[#8ECAE9] hover:text-[#786B6B] active:bg-[#63A1C0]`}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="26" height="25" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} viewBox="0 0 24 24" fill="none" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-waypoints"><circle cx="12" cy="4.5" r="2.5" /><path d="m10.2 6.3-3.9 3.9" /><circle cx="4.5" cy="12" r="2.5" /><path d="M7 12h10" /><circle cx="19.5" cy="12" r="2.5" /><path d="m13.8 17.7 3.9-3.9" /><circle cx="12" cy="19.5" r="2.5" /></svg>
-            <p className="w-full text-[14px] font-[410]">Shared with me</p>
-          </div>
-          <div>
-            <div onClick={onPersonalClick} className={` ${menu === 'Personal' && 'bg-[#8ECAE9]'} w-full flex items-center  gap-3 rounded-sm px-3 py-0.5 cursor-pointer hover:bg-[#8ECAE9] hover:text-[#786B6B] active:bg-[#63A1C0]`}>
-              <svg xmlns="http://www.w3.org/2000/svg" width="34" height="28" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} viewBox="0 0 24 24" fill="none" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-venetian-mask"><path d="M18 11c-1.5 0-2.5.5-3 2" /><path d="M4 6a2 2 0 0 0-2 2v4a5 5 0 0 0 5 5 8 8 0 0 1 5 2 8 8 0 0 1 5-2 5 5 0 0 0 5-5V8a2 2 0 0 0-2-2h-3a8 8 0 0 0-5 2 8 8 0 0 0-5-2z" /><path d="M6 11c1.5 0 2.5.5 3 2" /></svg>
-              <p className="w-full text-[14px] font-[410]">Personal</p>
-              {isPersonal ?
-                <svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6" /></svg>
-                : <svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-up"><path d="m18 15-6-6-6 6" /></svg>
-              }
+            {/* Menu list */}
+            <nav className="flex-1 overflow-auto">
+              <ul className="flex flex-col gap-1">
+                <li>
+                  <button
+                    onClick={() => {
+                      setMenu("Home");
+                      router.push(`/home/${name}`);
+                    }}
+                    className={cn(
+                      "w-full flex items-center gap-3 rounded px-3 py-1 text-sm font-medium",
+                      menu === "Home"
+                        ? "bg-[#3fabe0] text-[#ffffff]"
+                        : "hover:bg-[#52b5e6a9] hover:text-[#ffffff]"
+                    )}
+                  >
+                    <Home size={18} />
+                    <span>Home</span>
+                  </button>
+                </li>
+
+                <li>
+                  <button
+                    onClick={() => setMenuState("Search")}
+                    className="w-full flex items-center gap-3 rounded px-3 py-1 hover:bg-[#52b5e6a9] hover:text-[#ffffff]  text-sm font-medium"
+                  >
+                    <SearchIcon size={18} />
+                    <span>Search</span>
+                  </button>
+                </li>
+
+                <li>
+                  <button
+                    onClick={() => setMenuState("Trash")}
+                    className="w-full flex items-center gap-3 hover:bg-[#52b5e6a9] hover:text-[#ffffff] rounded px-3 py-1 text-sm font-medium"
+                  >
+                    <Trash2 size={18} />
+                    <span>Trash</span>
+                  </button>
+                </li>
+
+                <li>
+                  <div className="w-full flex items-center gap-3 rounded px-3 py-1 text-sm font-medium hover:bg-[#52b5e6a9] hover:text-[#ffffff]">
+                    <FilePlus size={18} />
+                    <button onClick={onCreatePage} className="w-full text-left">
+                      Create New
+                    </button>
+                  </div>
+                </li>
+
+                <li>
+                  <button
+                    onClick={() => {
+                      setMenu("Shared");
+                      router.push(`/shared/${name}`);
+                    }}
+                    className={cn(
+                      "w-full flex items-center gap-3 rounded px-3 py-1  text-sm font-medium",
+                      menu === "Shared"
+                        ? "bg-[#3fabe0] text-[#ffffff]"
+                        : "hover:bg-[#52b5e6a9] hover:text-[#ffffff]"
+                    )}
+                  >
+                    <Waypoints size={18} />
+                    <span>Shared with me</span>
+                  </button>
+                </li>
+
+                <li>
+                  <div>
+                    <button
+                      onClick={() => setIsPersonal((v) => !v)}
+                      className={cn(
+                        "w-full flex items-center gap-3 rounded px-3 py-1  text-sm font-medium",
+                        menu === "Personal"
+                          ? "bg-[#3fabe0] text-[#ffffff]"
+                          : "hover:bg-[#52b5e6a9] hover:text-[#ffffff]"
+                      )}
+                      aria-expanded={isPersonal}
+                    >
+                      <VenetianMask size={18} />
+                      <span className="flex-1 text-left">Personal</span>
+                      {isPersonal ? (
+                        <ChevronDown size={16} />
+                      ) : (
+                        <ChevronUp size={16} />
+                      )}
+                    </button>
+
+                    {/* pages list */}
+                    <div className="ml-8 mt-2 mb-2 max-h-52 overflow-auto pr-2">
+                      {isPersonal && pages.length === 0 && (
+                        <p className="text-xs opacity-60">
+                          No pages yet — create a new one.
+                        </p>
+                      )}
+                      {isPersonal &&
+                        pages.map((p) => (
+                          <Page
+                            key={p.$id}
+                            page={p}
+                            loggedInUserId={id}
+                            loggedInUserName={name}
+                            setDeletedId={setDeletedPageId}
+                          />
+                        ))}
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </nav>
+
+            {/* footer*/}
+            <div className="flex items-center justify-between gap-2 mt-2">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-linear-to-br from-gray-200 to-gray-400 flex items-center justify-center text-sm font-semibold">
+                  {name ? name.charAt(0).toUpperCase() : "U"}
+                </div>
+                <div className="flex flex-col">
+                  <button
+                    onClick={() => setProfileOpen((v) => !v)}
+                    className="text-sm font-medium text-left"
+                  >
+                    {name || "Unknown"}
+                  </button>
+                  <span className="text-xs opacity-60">{email}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  aria-label="Profile menu"
+                  onClick={() => setProfileOpen((v) => !v)}
+                  className="p-1 rounded hover:bg-black/5"
+                >
+                  {profileOpen ? (
+                    <ChevronUp size={18} />
+                  ) : (
+                    <ChevronDown size={18} />
+                  )}
+                </button>
+              </div>
             </div>
-            <div className="flex flex-col pl-[40px] lg:h-64 p-2 overflow-y-auto">
-              {isPersonal && pages && pages.map((element) => (
-                <Page key={element.$id} page={element} loggedInUserName={fullName} loggedInUserId={$id} setDeletedId={setDeletedPageId} />
-              ))}
-            </div>
+
+            {/* profile dropdown */}
+            {profileOpen && (
+              <div
+                className="
+    absolute left-4 bottom-20 w-[220px]
+    rounded-2xl p-3 shadow-xl backdrop-blur-sm border
+    transition-transform hover:-translate-y-1
+    bg-(--background)
+    border-(--bn-colors-menu-background)
+    text-(--color-neutral-content)
+  "
+              >
+                <ThemeToggle textVisibility />
+
+                {/* Sign Out */}
+                <button
+                  onClick={logout}
+                  className="
+      mt-3 w-full flex items-center gap-3  rounded-sm text-sm font-medium
+      text-(--color-error)
+      transition-all
+      hover:bg-(--color-error-hover)/15%  py-1
+      focus:outline-none focus:ring-2 focus:ring-(--color-primary)
+      focus:ring-offset-1
+    "
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2
+         2 0 012-2h6a2 2 0 012 2v1"
+                    />
+                  </svg>
+                  Sign out
+                </button>
+              </div>
+            )}
+
+            {/* resize handle */}
+            <div
+              onMouseDown={mouseDown}
+              role="separator"
+              aria-orientation="vertical"
+              className="cursor-ew-resize h-full w-0.5 hover:bg-[#979696] absolute right-0 top-0"
+            />
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              if (sideBarRef.current) sideBarRef.current.style.width = "320px";
+              setSidebarWidth("min-w-72");
+            }}
+            aria-label="Open sidebar"
+            className="absolute -right-9 top-4 z-50 cursor-pointer  p-1 "
+          >
+            <ChevronsRight size={24} color="var(--sidebar-foreground)" />
+          </button>
+        )}
+      </div>
+      {/* Loading overlay when creating */}
+      {onCreatePageLoading && (
+        <div className="absolute inset-0 z-50 flex width-screen height-screen items-center justify-center bg-white/70 dark:bg-[#00000066]">
+          <div className="flex items-center gap-3">
+            <Spinner size={28} color="var(--color-primary)" />
+            <span className="font-semibold text-(--color-base-content)">
+              Creating...
+            </span>
           </div>
         </div>
-        <div onClick={onProfileClick} className="absolute left-0 px-5 bottom-0 my-2 w-full  flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" width="35" height="35" viewBox="0 0 24 24" fill="none" stroke={theme === 'dark' ? "#4DA6DE" : "#2E5974"} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-circle-user"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="10" r="3" /><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662" /></svg>
-          <p className={`text-sm font-medium w-full cursor-pointer ${theme === 'dark' ? "text-[#4DA6DE]" : "text-[#2E5974]"}`}>Krishna Kumar Yadav</p>
-          {!profile ?
-            <svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6" /></svg>
-            : <svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" stroke={theme === 'dark' ? "#978D8D" : "#786B6B"} viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-chevron-up"><path d="m18 15-6-6-6 6" /></svg>
-          }
-        </div>
-        <div onMouseDown={mouseDown} className="cursor-ew-resize h-screen top-0 w-0.5  hover:bg-[#979696] absolute right-0 z-[99999]"></div>
-
-      </div> : <ChevronsRight onClick={() => setSidebarWidth('min-w-72')} className="absolute -right-6 top-4 z-[99999] cursor-pointer active:scale-95" size={20} color="#838383" />}
+      )}
     </aside>
   );
-};
-
-export default SideBar;
+}

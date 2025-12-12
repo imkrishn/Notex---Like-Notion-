@@ -1,35 +1,24 @@
 import { useState, useEffect } from "react";
-import { Query } from "appwrite";
-import { account, database } from "@/app/appwrite";
-import { User } from "@/types/userType";
 
-
-
-export function useLoggedInUser() {
-  const [user, setUser] = useState<User>();
+export function useGetLoggedinUser() {
+  const [user, setUser] = useState<any>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchUser() {
       try {
-        const loggedInUser = await account.get();
-        const { email } = loggedInUser
+        const res = await fetch("/api/auth/verifyUser", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
 
-        const theUser = await database.listDocuments(
-          process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
-          process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_USER_ID!,
-          [
-            Query.equal('email', email)
-          ]
-        );
+        const result = await res.json();
+        if (!res.ok) return;
 
-        if (theUser.total > 0) {
-          const { fullName, email, $id } = theUser.documents[0]
-          setUser({ fullName, email, $id })
+        if (result.success) {
+          setUser(result.user);
         }
-
-
       } catch (err: any) {
         console.error("Error fetching user:", err);
         setError(err.message);

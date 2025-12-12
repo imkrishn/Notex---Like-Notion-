@@ -1,204 +1,285 @@
-'use client'
+"use client";
 
-import Image from 'next/image'
-import bgLight from '@/public/signup-light.png'
-import bgDark from '@/public/signup-dark.png'
-import logo from '@/public/logo.png'
-import { useTheme } from 'next-themes'
-import { useEffect, useState } from 'react'
-import { cn } from '@/lib/utils'
-import { Lock, Mail, User } from 'lucide-react'
-import Button from '@/components/ui/button'
-import github from '@/public/github.png'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { toast } from 'sonner'
-import bcrypt from 'bcryptjs'
-import { account, database } from '@/app/appwrite'
+import Image from "next/image";
+import bgLight from "@/public/signup-light.png";
+import bgDark from "@/public/signup-dark.png";
+import logo from "@/public/logo.png";
+import { useTheme } from "next-themes";
+import { useState } from "react";
+import { Lock, Mail, User } from "lucide-react";
+import Button from "@/components/ui/button";
+import github from "@/public/github.png";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSeparator,
   InputOTPSlot,
-} from "@/components/ui/input-otp"
-import { Query } from 'appwrite'
-import { useRouter } from 'next/navigation'
-import { login } from '@/lib/signUpFromGithub'
+} from "@/components/ui/input-otp";
+import { useRouter } from "next/navigation";
+import ThemeToggle from "@/components/ThemeToggle";
 
+// Password validation
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{6,}$/;
 
-const passwordRegex =
-  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{6,}$/;
+// schema
+const UserSignupSchema = z
+  .object({
+    fullName: z.string().min(3, "Minimum 3 letters"),
+    email: z.string().email(),
+    password: z
+      .string()
+      .min(6, "Password must be of more than length 6")
+      .regex(
+        passwordRegex,
+        "Password must include uppercase, lowercase, number, and special character"
+      ),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
-const UserSignupSchema = z.object({
-  fullName: z.string().min(3, 'Minimum 3 letters'),
-  email: z.string().email(),
-  password: z.string()
-    .min(6, 'Password must be of more than length 6')
-    .regex(passwordRegex, "Password must include uppercase, lowercase, number, and special character"),
-  confirmPassword: z.string()
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"],
-})
+type UserSignupData = z.infer<typeof UserSignupSchema>;
 
-type UserSignupData = z.infer<typeof UserSignupSchema>
+export default function SignupPage() {
+  const { theme } = useTheme();
+  const [loading, setLoading] = useState<boolean>(false);
 
-const page = () => {
-  const { theme, setTheme } = useTheme();
-  const router = useRouter()
   const {
     register,
     handleSubmit,
-    getValues,
     formState: { errors, isSubmitting },
-  } = useForm<UserSignupData>({ resolver: zodResolver(UserSignupSchema) });
+  } = useForm<UserSignupData>({
+    resolver: zodResolver(UserSignupSchema),
+  });
 
-  const [userId, setUserId] = useState<string | undefined>();
-  const [otp, setOtp] = useState<string | undefined>()
+  const [otp, setOtp] = useState("");
+  const [emailVerified, setEmailVerified] = useState(false);
 
+  // Send OTP
+  async function onVerifyEmail(data: UserSignupData) {
+    setLoading(true);
+    try {
+      const { email, fullName } = data;
+      if (!email || !fullName)
+        return toast.warning("Email and name are required");
 
-  useEffect(() => {
-    setTheme('light')
-  }, [theme])
+      const res = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, name: fullName, type: "signup" }),
+      });
 
+      const result = await res.json();
 
+      if (!res.ok) return toast.error(result.message || "Failed to send OTP");
 
+      toast.success("OTP sent successfully! Check your email.");
+      setEmailVerified(true);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to send OTP. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function onSubmit(data: UserSignupData) {
+    setLoading(true);
     try {
+      if (!otp) return toast.warning("Please enter your OTP");
 
-      if (!data || !otp || !userId) {
-        return
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: data.email,
+          name: data.fullName,
+          password: data.password,
+          otp,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) return toast.error(result.message || "Signup failed");
+
+      if (result.success) {
+        window.location.href = `${process.env.NEXT_PUBLIC_URL}/home/${data.fullName}`;
       }
-
-      await account.createSession(userId, otp)
-
-
-      const { fullName, email, password, confirmPassword } = data
-
-      if (password !== confirmPassword) {
-        toast.error('Passwords not match');
-        return
-      }
-
-      const salt = await bcrypt.genSalt(10)
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      await account.updatePassword(hashedPassword)
-
-      await database.createDocument(
-        process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
-        process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_USER_ID!,
-        'unique()',
-        { fullName, email, password: hashedPassword }
-      )
-
-
-      router.push(`/${fullName}/home`)
-
     } catch (err) {
-      console.log(err);
-      toast.error('Failed to Signup.Try again')
+      console.error("Signup error:", err);
+      toast.error("Failed to signup. Try again later.");
+    } finally {
+      setLoading(false);
     }
   }
 
-
-  async function onVerifyEmail(data: UserSignupData) {
-    try {
-      if (!data) {
-        return
-      }
-
-      const email = data.email;
-
-      const user = await database.listDocuments(
-        process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
-        process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_USER_ID!,
-        [
-          Query.equal('email', email)
-        ]
-      )
-
-      if (user.total === 0) {
-        const session = await account.createEmailToken('unique()', email);
-        setUserId(session.userId);
-        toast.info("Otp sent to your's email for verfication")
-      } else {
-        toast.info("User exist with this email . Try different")
-      }
-
-
-
-    } catch (Err) {
-      console.log(Err);
-      toast.error('failed to verify . Try again')
-
-    }
-  }
-
+  const handleGithubLogin = () => {
+    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID}&redirect_uri=${process.env.NEXT_PUBLIC_URL}/auth/github/callback&scope=user:email`;
+    window.location.href = githubAuthUrl;
+  };
 
   return (
-    <main className='w-screen h-screen  p-2 overflow-clip bg-[#ECECEC] text-[hsl(var(--foreground))]'>
-      <Image src={logo} height={50} width={50} alt='bg mx-7' />
-      <div className={cn('shadow relative   flex items-center justify-center px-10 py-6 lg:mx-28 m-4 rounded-3xl', theme === 'dark' ? 'bg-black' : 'bg-white')}>
-        <Image src={theme === 'dark' ? bgDark : bgLight} height={800} width={400} alt='bg' className={cn(' rounded-2xl ', theme === 'dark' ? 'shadow-[5px_5px_16px_rgba(255,255,255,0.3)]' : 'shadow-[8px_8px_16px_rgba(0,0,0,0.3)]')} />
-        <aside className='w-full h-full px-4 '>
-          <div className="flex items-end gap-1 w-max right-4 top-4 absolute">
-            <p className="text-5xl font-black text-[#3897E4]">N</p>
-            <p className="text-2xl font-black text-[#30C24B]">otex</p>
-          </div>
-          <h2 className='text-center text-3xl font-extrabold my-7 '>Create an Account</h2>
-          <Button onClick={login} logo={github} text='Continue with Github' color='#ffffff' className='lg:w-1/2 text-[#868686] rounded-3xl m-auto' arrow={false} />
-          <span className='w-full flex items-center justify-between'>
-            <hr className='w-full' />
-            <p className='text-sm m-2'>OR</p>
-            <hr className='w-full' />
-          </span>
-          <form className='w-max h-full m-auto flex flex-col gap-3 justify-center'>
-            <span className='flex items-center gap-3 border  border-[#b3b0b0] bg-[#8b8b8b2a] rounded-3xl px-2'>
-              <User size={25} />
-              <input {...register('fullName', { required: true, })} type='text' disabled={userId ? true : false} className='px-4  py-1 outline-none w-full' placeholder='Full Name' />
-            </span>
-            {errors.fullName && <p className='m-auto text-red-500 font-medium text-sm'>{errors.fullName.message}</p>}
-            <span className='flex items-center gap-3 border  border-[#b3b0b0] bg-[#8b8b8b2a] rounded-3xl px-2'>
-              <Mail size={25} />
-              <input {...register('email', { required: true })} type='email' disabled={userId ? true : false} className='px-4  py-1 outline-none w-full' placeholder='E-Mail' />
-            </span>
-            {errors.email && <p className='m-auto text-red-500 font-medium text-sm'>{errors.email.message}</p>}
-            <span className='flex items-center gap-3 border  border-[#b3b0b0] bg-[#8b8b8b2a] rounded-3xl px-2'>
-              <Lock size={25} />
-              <input {...register('password', { required: true })} type='password' disabled={userId ? true : false} className='px-4  py-1 outline-none w-full' placeholder='Password' />
-            </span>
-            {errors.password && <p className='m-auto text-red-500 font-medium text-sm'>{errors.password.message}</p>}
-            <span className='flex items-center gap-3 border  border-[#b3b0b0] bg-[#8b8b8b2a] rounded-3xl px-2'>
-              <Lock size={25} />
-              <input {...register('confirmPassword', { required: true })} type='password' disabled={userId ? true : false} className='px-4  py-1  outline-none w-full' placeholder='Confirm Password' />
-            </span>
-            {errors.confirmPassword && <p className='m-auto text-red-500 font-medium text-sm'>{errors.confirmPassword.message}</p>}
-            {userId ? <InputOTP disabled={isSubmitting} maxLength={6} onChange={setOtp} onComplete={handleSubmit(onSubmit)} >
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-              </InputOTPGroup>
-              <InputOTPSeparator />
-              <InputOTPGroup>
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-              </InputOTPGroup>
-              <InputOTPSeparator />
-              <InputOTPGroup>
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP> :
-              <button onClick={handleSubmit(onVerifyEmail)} disabled={isSubmitting} className='w-full rounded-2xl text-center py-2 cursor-pointer active:scale-95  font-medium bg-[#3897E4] text-[#f8f7f7]'>{isSubmitting ? 'Verifing ... ' : 'Verify Email'}</button>}
-          </form>
+    <main className="w-screen lg:p-6 p-2 overflow-clip text-(--color-base-content)">
+      <div className="flex gap-2 justify-end items-center">
+        <div className="flex items-end gap-1 w-full ">
+          <p className="text-5xl font-black text-[#3897E4]">N</p>
+          <p className="text-2xl font-black text-[#30C24B]">otex</p>
+        </div>
+        <ThemeToggle />
+        <Image src={logo} height={50} width={50} alt="logo" />
+      </div>
 
+      <div className="relative flex lg:flex-row flex-col-reverse justify-center lg:px-10 lg:mx-28 m-4 rounded">
+        <Image
+          src={theme === "dark" ? bgDark : bgLight}
+          height={800}
+          width={400}
+          alt="background"
+        />
+
+        <aside className="w-full h-full px-4">
+          <h2 className="text-center lg:text-3xl text-2xl font-extrabold my-7">
+            Sign up and start building your ideas
+          </h2>
+
+          <Button
+            logo={github}
+            onClick={handleGithubLogin}
+            text="Continue with Github"
+            color="#ffffff"
+            className="lg:w-1/2 text-[#868686] rounded-3xl m-auto"
+            arrow={false}
+          />
+
+          <span className="w-full flex items-center justify-between">
+            <span className="w-full h-0.5 bg-(--color-base-content)" />
+            <p className="text-sm m-2">OR</p>
+            <span className="w-full h-0.5 bg-(--color-base-content)" />
+          </span>
+
+          <form
+            className="w-max h-full m-auto flex flex-col gap-3 justify-center"
+            onSubmit={handleSubmit(emailVerified ? onSubmit : onVerifyEmail)}
+          >
+            {/* Name Input */}
+            <span className="flex items-center gap-3 border border-[#b3b0b0] bg-[#8b8b8b2a] rounded-xl px-2">
+              <User size={21} />
+              <input
+                {...register("fullName")}
+                type="text"
+                disabled={emailVerified || loading}
+                className="px-4 py-1 outline-none w-full"
+                placeholder="Full Name"
+              />
+            </span>
+            {errors.fullName && (
+              <p className="m-auto text-red-500 font-medium text-sm">
+                {errors.fullName.message}
+              </p>
+            )}
+
+            {/* Email Input */}
+            <span className="flex items-center gap-3 border border-[#b3b0b0] bg-[#8b8b8b2a] rounded-xl px-2">
+              <Mail size={21} />
+              <input
+                {...register("email")}
+                type="email"
+                disabled={emailVerified || loading}
+                className="px-4 py-1 outline-none w-full"
+                placeholder="E-Mail"
+              />
+            </span>
+            {errors.email && (
+              <p className="m-auto text-red-500 font-medium text-sm">
+                {errors.email.message}
+              </p>
+            )}
+
+            {/* Password Input */}
+            <span className="flex items-center gap-3 border border-[#b3b0b0] bg-[#8b8b8b2a] rounded-xl px-2">
+              <Lock size={21} />
+              <input
+                {...register("password")}
+                type="password"
+                disabled={emailVerified || loading}
+                className="px-4 py-1 outline-none w-full"
+                placeholder="Password"
+              />
+            </span>
+            {errors.password && (
+              <p className="m-auto text-red-500 font-medium text-sm">
+                {errors.password.message}
+              </p>
+            )}
+
+            {/* Confirm Password Input */}
+            <span className="flex items-center gap-3 border border-[#b3b0b0] bg-[#8b8b8b2a] rounded-xl px-2">
+              <Lock size={21} />
+              <input
+                {...register("confirmPassword")}
+                type="password"
+                disabled={emailVerified || loading}
+                className="px-4 py-1 outline-none w-full"
+                placeholder="Confirm Password"
+              />
+            </span>
+            {errors.confirmPassword && (
+              <p className="m-auto text-red-500 font-medium text-sm">
+                {errors.confirmPassword.message}
+              </p>
+            )}
+
+            {/* OTP Field */}
+            {emailVerified && (
+              <div className="flex flex-col items-center gap-4 mt-4">
+                <InputOTP
+                  disabled={isSubmitting || loading}
+                  maxLength={6}
+                  onChange={setOtp}
+                  value={otp}
+                >
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                  </InputOTPGroup>
+                  <InputOTPSeparator />
+                  <InputOTPGroup>
+                    <InputOTPSlot index={2} />
+                    <InputOTPSlot index={3} />
+                  </InputOTPGroup>
+                  <InputOTPSeparator />
+                  <InputOTPGroup>
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+            )}
+
+            {/* Button */}
+            <button
+              type="submit"
+              disabled={isSubmitting || loading}
+              className="w-full rounded-2xl text-center py-2 cursor-pointer active:scale-95 font-medium bg-[#3897E4] text-[#f8f7f7]"
+            >
+              {isSubmitting
+                ? emailVerified
+                  ? "Verifying..."
+                  : "Sending OTP..."
+                : emailVerified
+                ? "Verify & Signup"
+                : "Verify Email"}
+            </button>
+          </form>
         </aside>
       </div>
     </main>
-  )
+  );
 }
-
-export default page

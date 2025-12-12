@@ -1,23 +1,17 @@
-'use client';
+"use client";
 
-import SideBar from "@/components/SideBar";
-import { store } from "@/redux/store";
-import React from "react";
-import { Provider } from "react-redux";
-import { Toaster } from "sonner";
-
-
+import { LiveblocksProvider } from "@liveblocks/react";
+import "@blocknote/core/fonts/inter.css";
+import "@blocknote/mantine/style.css";
+import "@liveblocks/react-ui/styles.css";
+import "@liveblocks/react-ui/styles/dark/media-query.css";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-
-
   return (
-    <Provider store={store}>
-      <main className="h-screen w-screen relative flex overflow-clip">
-        <SideBar />
+    <main className="h-full w-full">
+      <LiveblocksProvider throttle={16} authEndpoint="/api/liveblocks-auth">
         {children}
-        <Toaster position="top-center" richColors closeButton />
-      </main>
-    </Provider>
+      </LiveblocksProvider>
+    </main>
   );
 }

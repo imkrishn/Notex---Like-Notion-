@@ -1,24 +1,26 @@
-
+"use client";
 
 import Create from "@/components/Create";
 import Home from "@/components/Home";
-import { Room } from "@/components/Room";
 import SharedWithMe from "@/components/SharedWithMe";
 
+import { usePathname } from "next/navigation";
+import React from "react";
 
-export default async function Main({ params }: { params: { id: string, name: string } }) {
+const page = () => {
+  const pathname = usePathname();
 
-  const { id } = await params
-
+  const params = pathname.split("/");
+  const pageId = params[2];
+  const pageName = params[1];
 
   return (
-
-    <div className="overflow-auto h-screen w-full">
-      {id.length === 20 && <Room roomId={id}><Create pageId={id} edit={true} /></Room>}
-      {id === 'home' && <Home />}
-      {id === 'shared' && <SharedWithMe />}
+    <div className="h-full overflow-auto">
+      {pageName === "home" && <Home />}
+      {pageName === "page" && <Create pageId={pageId} edit={true} />}
+      {pageName === "shared" && <SharedWithMe />}
     </div>
-
-
   );
-}
+};
+
+export default page;

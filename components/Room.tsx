@@ -1,31 +1,28 @@
-"use client";
-
 import { ReactNode } from "react";
-import {
-  LiveblocksProvider,
-  RoomProvider,
-  ClientSideSuspense,
-} from "@liveblocks/react/suspense";
+import { RoomProvider, ClientSideSuspense } from "@liveblocks/react/suspense";
 import Spinner from "./Spinner";
 import LiveCursorPointer from "./LiveCursorPointer";
 
-export function Room({ children, roomId }: { children: ReactNode, roomId: string }) {
+export function Room({
+  children,
+  roomId,
+}: {
+  children: ReactNode;
+  roomId: string;
+}) {
   return (
-    <LiveblocksProvider publicApiKey={process.env.NEXT_PUBLIC_LIVEBLOCK_API_KEY!}>
-      <RoomProvider id={roomId} initialPresence={{
-        cursor: null,
-        info: {
-          name: "Alice",
-          avatar: "https://i.pravatar.cc/150?u=alice" // example
-        }
-      }}
+    <div className="w-full h-full">
+      <RoomProvider
+        id={roomId}
+        initialPresence={{
+          cursor: null,
+        }}
       >
         <ClientSideSuspense fallback={<Spinner size={40} color="#4e91df" />}>
-          <LiveCursorPointer>
-            {children}
-          </LiveCursorPointer>
+          <LiveCursorPointer>{children}</LiveCursorPointer>
+          {children}
         </ClientSideSuspense>
       </RoomProvider>
-    </LiveblocksProvider>
+    </div>
   );
 }

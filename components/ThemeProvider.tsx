@@ -11,7 +11,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <NextThemesProvider attribute="class" defaultTheme="system">
+    <NextThemesProvider attribute="class" defaultTheme="light">
       {mounted ? children : null}
     </NextThemesProvider>
   );

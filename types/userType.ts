@@ -3,10 +3,13 @@ interface Favourites {
   pageId: string;
 }
 
-export interface User {
-  $id: string | undefined;
-  fullName?: string | undefined;
-  email: string | undefined;
-  favourites?: Favourites[]
-
-}
+export type User = {
+  $id: string;
+  fullname: string;
+  password?: string;
+  isVerified?: Boolean;
+  verificationToken?: string | null;
+  verificationTokenTime?: Date | null;
+  resetVerificationToken?: string | null;
+  resetVerificationTokenTime?: Date | null;
+};
